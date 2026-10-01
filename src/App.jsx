@@ -319,7 +319,7 @@ function App() {
         model: dbProduct.modelo,
         category: dbProduct.categoria,
         size: dbProduct.talla,
-        sizes: dbProduct.tallas || [],
+       tallas: dbProduct.tallas || [],
         image: dbProduct.imagen,
         status: dbProduct.estado,
       };
