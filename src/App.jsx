@@ -20,7 +20,7 @@ const STORAGE_SELECTION = "luper_selection";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || "56900000000";
+const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || "56920162009";
 
 function App() {
   const [screen, setScreen] = useState("home");
@@ -38,9 +38,36 @@ function App() {
   // ======================================================
 
   const [selection, setSelection] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_SELECTION);
+    try {
+      const saved = localStorage.getItem(STORAGE_SELECTION);
 
-    return saved ? JSON.parse(saved) : [];
+      if (!saved) {
+        return [];
+      }
+
+      const parsed = JSON.parse(saved);
+
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      // Solo conservar selecciones del formato nuevo:
+      // { productId, talla, cantidad }
+      return parsed.filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          Number.isInteger(Number(item.productId)) &&
+          item.talla !== undefined &&
+          item.talla !== null &&
+          String(item.talla).trim() !== "" &&
+          Number(item.cantidad) > 0,
+      );
+    } catch (error) {
+      console.error("Error leyendo selección guardada:", error);
+
+      return [];
+    }
   });
 
   const [category, setCategory] = useState("Hombre");
@@ -61,7 +88,7 @@ function App() {
   const [newProduct, setNewProduct] = useState({
     model: "",
     category: "Hombre",
-    size: "",
+    sizes: [{ size: "", stock: 1 }],
     imageFile: null,
   });
 
@@ -119,11 +146,11 @@ function App() {
           model: producto.modelo,
           category: producto.categoria,
           size: producto.talla,
+          tallas: producto.tallas || [],
           image: producto.imagen,
           status: producto.estado,
           createdAt: producto.creado_en,
         }));
-
         setProducts(productosAdaptados);
       } catch (error) {
         console.error("Error cargando productos:", error);
@@ -150,9 +177,23 @@ function App() {
   // PRODUCTOS SELECCIONADOS
   // ======================================================
 
-  const selectedProducts = products.filter((product) =>
-    selection.includes(product.id),
-  );
+  const selectedProducts = selection
+    .map((selectedItem) => {
+      const product = products.find(
+        (item) => item.id === selectedItem.productId,
+      );
+
+      if (!product) {
+        return null;
+      }
+
+      return {
+        ...product,
+        selectedSize: selectedItem.talla,
+        quantity: selectedItem.cantidad,
+      };
+    })
+    .filter(Boolean);
 
   // ======================================================
   // VOLVER AL INICIO
@@ -169,16 +210,33 @@ function App() {
   // SELECCIONAR PRODUCTO
   // ======================================================
 
-  const toggleSelection = (product) => {
+  const toggleSelection = (product, talla, cantidad = 1) => {
     if (product.status !== "disponible") {
       return;
     }
 
-    setSelection((current) =>
-      current.includes(product.id)
-        ? current.filter((id) => id !== product.id)
-        : [...current, product.id],
-    );
+    setSelection((current) => {
+      const existingIndex = current.findIndex(
+        (item) =>
+          item.productId === product.id && String(item.talla) === String(talla),
+      );
+
+      // Si ya está exactamente ese producto + talla,
+      // lo quitamos de la selección.
+      if (existingIndex !== -1) {
+        return current.filter((_, index) => index !== existingIndex);
+      }
+
+      // Si no está, lo agregamos con talla y cantidad.
+      return [
+        ...current,
+        {
+          productId: product.id,
+          talla: String(talla),
+          cantidad: Number(cantidad),
+        },
+      ];
+    });
   };
 
   // ======================================================
@@ -189,10 +247,18 @@ function App() {
       if (
         !newProduct.model.trim() ||
         !newProduct.category ||
-        !newProduct.size.trim() ||
-        !newProduct.imageFile
+        !newProduct.imageFile ||
+        newProduct.sizes.length === 0 ||
+        newProduct.sizes.some(
+          (item) =>
+            !item.size.trim() ||
+            !Number.isInteger(Number(item.stock)) ||
+            Number(item.stock) < 0,
+        )
       ) {
-        alert("Completa modelo, categoría, talla y selecciona una foto.");
+        alert(
+          "Completa modelo, categoría, tallas, unidades y selecciona una foto.",
+        );
         return;
       }
 
@@ -228,7 +294,10 @@ function App() {
         body: JSON.stringify({
           modelo: newProduct.model.trim(),
           categoria: newProduct.category,
-          talla: newProduct.size.trim(),
+          tallas: newProduct.sizes.map((item) => ({
+            talla: item.size.trim(),
+            stock: Number(item.stock),
+          })),
           imagen: uploadData.imagen,
           imagen_public_id: uploadData.publicId,
         }),
@@ -250,6 +319,7 @@ function App() {
         model: dbProduct.modelo,
         category: dbProduct.categoria,
         size: dbProduct.talla,
+        sizes: dbProduct.tallas || [],
         image: dbProduct.imagen,
         status: dbProduct.estado,
       };
@@ -261,7 +331,7 @@ function App() {
       setNewProduct({
         model: "",
         category: "Hombre",
-        size: "",
+        sizes: [{ size: "", stock: 1 }],
         imageFile: null,
       });
 
@@ -306,7 +376,7 @@ function App() {
       );
 
       setSelection((currentSelection) =>
-        currentSelection.filter((item) => item.id !== product.id),
+        currentSelection.filter((item) => item.productId !== product.id),
       );
 
       alert("🗑️ Producto eliminado correctamente");
@@ -356,7 +426,7 @@ function App() {
 
       if (data.producto.estado !== "disponible") {
         setSelection((current) =>
-          current.filter((selectedId) => selectedId !== id),
+          current.filter((item) => item.productId !== id),
         );
       }
     } catch (error) {
@@ -470,6 +540,7 @@ function App() {
         model: product.modelo,
         category: product.categoria,
         size: product.talla,
+        tallas: product.tallas || [],
         image: product.imagen,
         status: product.estado,
       }));
@@ -526,7 +597,8 @@ function App() {
     doc.setFont("helvetica", "bold");
 
     doc.text("Producto", 20, y);
-    doc.text("Talla", 155, y);
+    doc.text("Talla", 135, y);
+    doc.text("Cant.", 165, y);
 
     y += 9;
 
@@ -534,8 +606,8 @@ function App() {
 
     selectedProducts.forEach((product) => {
       doc.text(product.model, 20, y);
-
-      doc.text(String(product.size), 155, y);
+      doc.text(String(product.selectedSize), 135, y);
+      doc.text(String(product.quantity), 165, y);
 
       y += 9;
     });
@@ -546,7 +618,12 @@ function App() {
 
     doc.setFontSize(10);
 
-    doc.text(`Cantidad de productos: ${selectedProducts.length}`, 20, y + 14);
+    const totalUnidades = selectedProducts.reduce(
+      (total, product) => total + Number(product.quantity || 1),
+      0,
+    );
+
+    doc.text(`Total de unidades: ${totalUnidades}`, 20, y + 14);
 
     doc.text(`Fecha: ${new Date().toLocaleDateString("es-CL")}`, 20, y + 22);
 
@@ -563,12 +640,16 @@ function App() {
 
   const openWhatsApp = () => {
     const text = [
-      "Hola LUPER 👋",
+      "Hola LUPER ",
+      "",
+      `Mi nombre es: ${customerName.trim()}`,
+      `Mi teléfono / WhatsApp: ${customerPhone.trim()}`,
       "",
       "Me interesan los siguientes productos:",
       "",
       ...selectedProducts.map(
-        (product) => `• ${product.model} — Talla ${product.size}`,
+        (product) =>
+          `• ${product.model} - Talla ${product.selectedSize} - Cantidad: ${product.quantity}`,
       ),
       "",
       "Quedo atento/a. ¡Gracias!",
@@ -601,7 +682,11 @@ function App() {
         },
 
         body: JSON.stringify({
-          productos: selectedProducts.map((product) => product.id),
+          productos: selectedProducts.map((product) => ({
+            producto_id: product.id,
+            talla: product.selectedSize,
+            cantidad: product.quantity,
+          })),
           nombre_cliente: customerName.trim(),
           telefono_cliente: customerPhone.trim(),
         }),
@@ -847,7 +932,9 @@ function App() {
               <ProductCard
                 key={product.id}
                 product={product}
-                selected={selection.includes(product.id)}
+                selectedItems={selection.filter(
+                  (item) => item.productId === product.id,
+                )}
                 onSelect={toggleSelection}
                 admin={false}
               />
@@ -898,17 +985,29 @@ function App() {
           <>
             <div className="selection-list">
               {selectedProducts.map((product) => (
-                <div className="selection-item" key={product.id}>
+                <div
+                  className="selection-item"
+                  key={`${product.id}-${product.selectedSize}`}
+                >
                   <img src={product.image} alt={product.model} />
 
                   <div>
                     <strong>{product.model}</strong>
 
-                    <span>Talla {product.size}</span>
+                    <span>Talla {product.selectedSize}</span>
+
+                    <span>Cantidad: {product.quantity}</span>
                   </div>
 
                   <button
-                    onClick={() => toggleSelection(product)}
+                    type="button"
+                    onClick={() =>
+                      toggleSelection(
+                        product,
+                        product.selectedSize,
+                        product.quantity,
+                      )
+                    }
                     aria-label="Eliminar"
                   >
                     ×
@@ -1222,20 +1321,79 @@ function App() {
                   </select>
                 </label>
 
-                <label>
-                  Talla
-                  <input
-                    type="text"
-                    placeholder="Ej: 42"
-                    value={newProduct.size}
-                    onChange={(e) =>
+                <div className="product-sizes-field">
+                  <span>Tallas y unidades disponibles</span>
+
+                  <div className="product-sizes-list">
+                    {newProduct.sizes.map((item, index) => (
+                      <div className="product-size-row" key={index}>
+                        <label>
+                          Talla
+                          <input
+                            type="text"
+                            placeholder="Ej: 42"
+                            value={item.size}
+                            onChange={(e) => {
+                              const sizes = [...newProduct.sizes];
+                              sizes[index] = {
+                                ...sizes[index],
+                                size: e.target.value,
+                              };
+                              setNewProduct({ ...newProduct, sizes });
+                            }}
+                          />
+                        </label>
+
+                        <label>
+                          Unidades
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={item.stock}
+                            onChange={(e) => {
+                              const sizes = [...newProduct.sizes];
+                              sizes[index] = {
+                                ...sizes[index],
+                                stock: e.target.value,
+                              };
+                              setNewProduct({ ...newProduct, sizes });
+                            }}
+                          />
+                        </label>
+
+                        <button
+                          type="button"
+                          className="outline-button size-remove-button"
+                          disabled={newProduct.sizes.length === 1}
+                          onClick={() =>
+                            setNewProduct({
+                              ...newProduct,
+                              sizes: newProduct.sizes.filter(
+                                (_, i) => i !== index,
+                              ),
+                            })
+                          }
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="outline-button add-size-button"
+                    onClick={() =>
                       setNewProduct({
                         ...newProduct,
-                        size: e.target.value,
+                        sizes: [...newProduct.sizes, { size: "", stock: 1 }],
                       })
                     }
-                  />
-                </label>
+                  >
+                    + Agregar otra talla
+                  </button>
+                </div>
 
                 <div className="product-photo-field">
                   <span>Foto del producto</span>
@@ -1466,7 +1624,13 @@ function App() {
                           <div>
                             <strong>{producto.modelo}</strong>
 
-                            <span>Talla {producto.talla}</span>
+                            <span>
+                              <div className="request-product-details">
+                                <span>Talla {producto.talla}</span>
+
+                                <span>Cantidad: {producto.cantidad || 1}</span>
+                              </div>
+                            </span>
                           </div>
                         </div>
                       ))}

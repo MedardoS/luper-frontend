@@ -2146,3 +2146,82 @@ Ocultamos el segundo slogan agregado desde React.
     max-height: calc(100% - 10px);
   }
 }
+.product-sizes-stock {
+  margin-top: 12px;
+}
+
+.product-sizes-stock strong {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a817c;
+}
+
+.sizes-stock-list {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  gap: 7px;
+}
+
+.sizes-stock-list span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 7px 10px;
+  min-width: 82px;
+
+  background: #f5f3f0;
+  border: 1px solid rgba(198, 167, 125, 0.45);
+  border-radius: 8px;
+
+  font-family: "Montserrat", sans-serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.2;
+
+  color: #1c1c1c;
+}
+.sizes-stock-list span {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+
+  padding: 8px 11px;
+  min-width: 85px;
+
+  background: #f5f3f0;
+  border: 1px solid rgba(198, 167, 125, 0.45);
+  border-radius: 9px;
+}
+
+.sizes-stock-list span strong {
+  margin: 0;
+  color: #1c1c1c;
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sizes-stock-list span small {
+  color: #5f7f9f;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* Talla sin stock */
+.sizes-stock-list span.size-out-stock {
+  opacity: 0.45;
+  background: #eeeeec;
+  border-style: dashed;
+}
+
+.sizes-stock-list span.size-out-stock small {
+  color: #8a817c;
+}
