@@ -89,10 +89,10 @@ function App() {
     model: "",
     category: "Hombre",
     sizes: [{ size: "", stock: 1 }],
-    imageFile: null,
+    imageFiles: [],
   });
 
-  const [imagePreview, setImagePreview] = useState("");
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [savingProduct, setSavingProduct] = useState(false);
 
   // ======================================================
@@ -148,6 +148,7 @@ function App() {
           size: producto.talla,
           tallas: producto.tallas || [],
           image: producto.imagen,
+          images: producto.imagenes || [],
           status: producto.estado,
           createdAt: producto.creado_en,
         }));
@@ -247,7 +248,8 @@ function App() {
       if (
         !newProduct.model.trim() ||
         !newProduct.category ||
-        !newProduct.imageFile ||
+        newProduct.imageFiles.length === 0 ||
+        newProduct.imageFiles.length > 4 ||
         newProduct.sizes.length === 0 ||
         newProduct.sizes.some(
           (item) =>
@@ -257,32 +259,42 @@ function App() {
         )
       ) {
         alert(
-          "Completa modelo, categoría, tallas, unidades y selecciona una foto.",
+          "Completa modelo, categoría, tallas, unidades y selecciona entre 1 y 4 fotos.",
         );
         return;
       }
 
       setSavingProduct(true);
+      // 1. Subir las imágenes a Cloudinary mediante nuestro backend
+      const uploadedImages = [];
 
-      // 1. Subir imagen a Cloudinary mediante nuestro backend
-      const formData = new FormData();
-      formData.append("imagen", newProduct.imageFile);
+      for (const imageFile of newProduct.imageFiles) {
+        const formData = new FormData();
+        formData.append("imagen", imageFile);
 
-      const uploadResponse = await fetch(`${API_URL}/upload`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
-        body: formData,
-      });
+        const uploadResponse = await fetch(`${API_URL}/upload`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+          },
+          body: formData,
+        });
 
-      const uploadData = await uploadResponse.json();
+        const uploadData = await uploadResponse.json();
 
-      if (!uploadResponse.ok) {
-        throw new Error(uploadData.mensaje || "Error subiendo la imagen");
+        if (!uploadResponse.ok) {
+          throw new Error(
+            uploadData.mensaje || "Error subiendo una de las imágenes",
+          );
+        }
+
+        uploadedImages.push({
+          imagen: uploadData.imagen,
+          publicId: uploadData.publicId,
+        });
       }
 
-      console.log("☁️ Imagen subida:", uploadData);
+      console.log("☁️ Imágenes subidas:", uploadedImages);
 
       // 2. Crear producto en PostgreSQL
       const productResponse = await fetch(`${API_URL}/productos`, {
@@ -298,8 +310,12 @@ function App() {
             talla: item.size.trim(),
             stock: Number(item.stock),
           })),
-          imagen: uploadData.imagen,
-          imagen_public_id: uploadData.publicId,
+          imagen: uploadedImages[0].imagen,
+          imagen_public_id: uploadedImages[0].publicId,
+          imagenes: uploadedImages.map((item) => ({
+            imagen: item.imagen,
+            publicId: item.publicId,
+          })),
         }),
       });
 
@@ -319,8 +335,9 @@ function App() {
         model: dbProduct.modelo,
         category: dbProduct.categoria,
         size: dbProduct.talla,
-       tallas: dbProduct.tallas || [],
+        tallas: dbProduct.tallas || [],
         image: dbProduct.imagen,
+        images: dbProduct.imagenes || [],
         status: dbProduct.estado,
       };
 
@@ -332,10 +349,10 @@ function App() {
         model: "",
         category: "Hombre",
         sizes: [{ size: "", stock: 1 }],
-        imageFile: null,
+        imageFiles: [],
       });
 
-      setImagePreview("");
+      setImagePreviews([]);
       setShowAddProduct(false);
 
       alert("🔥 Producto agregado correctamente");
@@ -542,6 +559,7 @@ function App() {
         size: product.talla,
         tallas: product.tallas || [],
         image: product.imagen,
+        images: product.imagenes || [],
         status: product.estado,
       }));
 
@@ -1272,13 +1290,13 @@ function App() {
                   className="outline-button"
                   onClick={() => {
                     setShowAddProduct(false);
-                    setImagePreview("");
+                    setImagePreviews([]);
 
                     setNewProduct({
                       model: "",
                       category: "Hombre",
-                      size: "",
-                      imageFile: null,
+                      sizes: [{ size: "", stock: 1 }],
+                      imageFiles: [],
                     });
                   }}
                 >
@@ -1396,34 +1414,51 @@ function App() {
                 </div>
 
                 <div className="product-photo-field">
-                  <span>Foto del producto</span>
+                  <span>Fotos del producto (máximo 4)</span>
 
                   <label className="photo-upload-button">
-                    📷 Seleccionar foto
+                    📷 Seleccionar fotos
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
+                      multiple
                       hidden
                       onChange={(e) => {
-                        const file = e.target.files?.[0];
+                        const files = Array.from(e.target.files || []);
 
-                        if (!file) return;
+                        if (files.length === 0) return;
+
+                        if (files.length > 4) {
+                          alert("Puedes seleccionar un máximo de 4 fotos.");
+                          e.target.value = "";
+                          return;
+                        }
 
                         setNewProduct({
                           ...newProduct,
-                          imageFile: file,
+                          imageFiles: files,
                         });
 
-                        setImagePreview(URL.createObjectURL(file));
+                        setImagePreviews(
+                          files.map((file) => URL.createObjectURL(file)),
+                        );
                       }}
                     />
                   </label>
 
-                  {imagePreview && (
+                  {imagePreviews.length > 0 && (
                     <div className="image-preview">
-                      <img src={imagePreview} alt="Vista previa del producto" />
+                      {imagePreviews.map((preview, index) => (
+                        <img
+                          key={preview}
+                          src={preview}
+                          alt={`Vista previa ${index + 1} del producto`}
+                        />
+                      ))}
 
-                      <span>✓ Foto seleccionada</span>
+                      <span>
+                        ✓ {imagePreviews.length} foto(s) seleccionada(s)
+                      </span>
                     </div>
                   )}
                 </div>

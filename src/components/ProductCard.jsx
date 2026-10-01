@@ -13,6 +13,28 @@ export default function ProductCard({
 }) {
   const info = statusInfo[product.status] || statusInfo.disponible;
 
+  const productImages = useMemo(() => {
+    const gallery = Array.isArray(product.images)
+      ? product.images
+          .map((item) => (typeof item === "string" ? item : item?.imagen))
+          .filter(Boolean)
+      : [];
+
+    if (gallery.length > 0) {
+      return gallery;
+    }
+
+    return product.image ? [product.image] : [];
+  }, [product.images, product.image]);
+
+  const [activeImage, setActiveImage] = useState(
+    productImages[0] || product.image || "",
+  );
+
+  useEffect(() => {
+    setActiveImage(productImages[0] || product.image || "");
+  }, [productImages, product.image]);
+
   const tallasDisponibles = useMemo(
     () => (product.tallas || []).filter((item) => Number(item.stock) > 0),
     [product.tallas],
@@ -84,20 +106,43 @@ export default function ProductCard({
         selected ? "selected" : ""
       } ${disabled ? "is-disabled" : ""}`}
     >
-      <div className="product-image-wrap">
-        <img
-          src={product.image}
-          alt={product.model}
-          className="product-image"
-        />
+      <div className="product-gallery">
+        <div className="product-image-wrap">
+          <img
+            src={activeImage || product.image}
+            alt={product.model}
+            className="product-image"
+          />
 
-        {disabled && (
-          <div className="image-overlay">
-            <LockKeyhole size={18} />
+          {disabled && (
+            <div className="image-overlay">
+              <LockKeyhole size={18} />
 
-            <span>
-              {tallasDisponibles.length === 0 ? "Sin stock" : info.label}
-            </span>
+              <span>
+                {tallasDisponibles.length === 0 ? "Sin stock" : info.label}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {productImages.length > 1 && (
+          <div
+            className="product-thumbnails"
+            aria-label={`Fotos de ${product.model}`}
+          >
+            {productImages.map((image, index) => (
+              <button
+                key={`${product.id}-image-${index}`}
+                type="button"
+                className={`product-thumbnail ${
+                  activeImage === image ? "active" : ""
+                }`}
+                onClick={() => setActiveImage(image)}
+                aria-label={`Ver foto ${index + 1} de ${product.model}`}
+              >
+                <img src={image} alt={`${product.model} - foto ${index + 1}`} />
+              </button>
+            ))}
           </div>
         )}
       </div>
